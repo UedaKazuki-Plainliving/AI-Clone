@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AIクローンを活用して実利用者の要求を抽出し、ATDD（受け入れテスト駆動開発）とISO品質分析を自動化するプラットフォーム">
+  <title>AI-Clone QA & 要求分析フレームワーク</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <!-- Vanilla CSS Link -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="logo-container">
+        <div class="logo-icon">🧬</div>
+        <span class="logo-text">AI-Clone QA</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#dashboard" class="nav-item active" id="nav-dashboard">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+          ダッシュボード
+        </a>
+        <a href="#clones" class="nav-item" id="nav-clones">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 8 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          利用者クローン＆複製
+        </a>
+        <a href="#debate" class="nav-item" id="nav-debate">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+          要求抽出ディベート
+        </a>
+        <a href="#atdd" class="nav-item" id="nav-atdd">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+          ATDD＆自動化コード
+        </a>
+        <a href="#reviewer" class="nav-item" id="nav-reviewer">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          定期レビューアー
+        </a>
+        <a href="#quality" class="nav-item" id="nav-quality">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+          品質特性メトリクス
+        </a>
+        <a href="#settings" class="nav-item" id="nav-settings">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          システム設定
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="status-indicator online"></span>
+        <span class="status-text">ローカルサーバー稼働中</span>
+      </div>
+    </aside>
+
+    <!-- Main Content Panel -->
+    <main class="main-panel">
+      <header class="main-header">
+        <h1 id="page-title">ダッシュボード</h1>
+        <div class="header-actions">
+          <button class="btn btn-secondary" id="btn-load-preset">デモ用プリセットを読込</button>
+          <span class="badge" id="mode-badge">Mock 実行モード</span>
+        </div>
+      </header>
+
+      <div class="content-body">
+        
+        <!-- SECTION: Dashboard -->
+        <section id="sec-dashboard" class="content-section active">
+          <div class="grid-2-1">
+            
+            <!-- Left Side: Survey Form -->
+            <div class="card glass-card fade-in">
+              <h2 class="card-title">🔍 新規シミュレーション作成</h2>
+              <p class="card-desc">実ユーザーアンケートや要件テキストを入力し、AIクローンによる分析とテスト自動化フローを開始します。</p>
+              
+              <form id="form-simulation">
+                <div class="form-group">
+                  <label for="system-name">システム名 / プロジェクト名</label>
+                  <input type="text" id="system-name" required placeholder="例: 社内経費精算申請システム、患者予約システム">
+                </div>
+                <div class="form-group">
+                  <label for="survey-input">実ユーザーアンケート・要望フィードバック</label>
+                  <textarea id="survey-input" required rows="8" placeholder="ユーザーからの要望やアンケート結果を入力してください。
+例: スマホから領収書をアップロードする時の画像認識の精度が低く、手動修正が多い。勘定科目の選択肢が多すぎて、どれを選べばいいか分からない..."></textarea>
+                </div>
+                <div class="btn-group">
+                  <button type="submit" class="btn btn-primary" id="btn-run-simulation">
+                    <span class="btn-spinner hidden" id="spinner-simulate"></span>
+                    🧬 シミュレーションを実行
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Right Side: Workflow info -->
+            <div class="card glass-card info-card fade-in">
+              <h2 class="card-title">🤖 8体のAIクローン体制</h2>
+              <ul class="clone-list">
+                <li>
+                  <span class="clone-icon">👥</span>
+                  <div>
+                    <strong>1. 利用者クローン</strong>
+                    <p>アンケートに基づき実ユーザーの行動特性とペインポイントを再現</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="clone-icon">📈</span>
+                  <div>
+                    <strong>2. 複製クローン＆ラベリング</strong>
+                    <p>ユーザー数を統計的に増やし、各クローンの信頼性を評価・ラベリング</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="clone-icon">💬</span>
+                  <div>
+                    <strong>3. QAスペシャリスト</strong>
+                    <p>2〜3体のQAエージェントが協調し、潜在的な要望と受入基準を抽出</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="clone-icon">💼</span>
+                  <div>
+                    <strong>4. プロジェクトマネージャー (PM)</strong>
+                    <p>システム特性と背景から受入基準をレビューし、QAと修正ループを回す</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="clone-icon">⚙️</span>
+                  <div>
+                    <strong>5. 自動化エンジニア</strong>
+                    <p>受入基準をGherkin(ATDD)化し、Playwrightテストコードへ落とし込む</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="clone-icon">🔍</span>
+                  <div>
+                    <strong>6. 定期レビューアー</strong>
+                    <p>開発設計書や実装コードがATDD基準を満たしているかを自動検証</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="clone-icon">👑</span>
+                  <div>
+                    <strong>7. 総合指揮者</strong>
+                    <p>全体の進捗を統括し「真に必要とされる妥当なシステム化」を判定・レポート</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="clone-icon">🛡️</span>
+                  <div>
+                    <strong>8. 品質管理者</strong>
+                    <p>ISO/IEC 25010の品質特性に基づき、利用時品質と製品品質を可視化</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION: Clones -->
+        <section id="sec-clones" class="content-section">
+          <div class="section-desc">
+            入力したアンケートから生成された実利用者のペルソナ（利用者クローン）と、統計モデルによりスケールされた複製クローンのリストです。
+          </div>
+          
+          <div class="card glass-card">
+            <h2 class="card-title">👥 利用者クローン (実ユーザーベース)</h2>
+            <div class="persona-grid" id="user-clones-container">
+              <div class="no-data">シミュレーションをまだ実行していません。デモ用プリセットを読み込むか、ダッシュボードから実行してください。</div>
+            </div>
+          </div>
+
+          <div class="card glass-card margin-top">
+            <h2 class="card-title">📈 統計複製クローン & 信頼性ラベリング</h2>
+            <p class="card-desc">属性値や想定シナリオに対する反応の整合性に基づき、各複製クローンの『信頼性スコア』を自動算出しています。</p>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>クローンID</th>
+                    <th>氏名(仮)</th>
+                    <th>元ペルソナ</th>
+                    <th>ロール</th>
+                    <th>年齢</th>
+                    <th>ITリテラシー</th>
+                    <th>信頼性スコア</th>
+                    <th>ラベル</th>
+                  </tr>
+                </thead>
+                <tbody id="duplicate-clones-tbody">
+                  <tr>
+                    <td colspan="8" class="center-text text-muted">データがありません。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION: Debate -->
+        <section id="sec-debate" class="content-section">
+          <div class="section-desc">
+            QAスペシャリストクローン（複数体）とPMクローンがチャット形式で議論を行い、要求仕様のブラッシュアップとユーザーストーリーの合意形成を行うプロセスを可視化します。
+          </div>
+
+          <div class="card glass-card chat-card">
+            <h2 class="card-title">💬 エージェント会議 (QA × PM コラボレーション)</h2>
+            <div class="chat-container" id="chat-container">
+              <!-- Chat logs go here -->
+              <div class="no-data">シミュレーションを実行すると、AIクローン同士の議論プロセスがここに流れます。</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION: ATDD -->
+        <section id="sec-atdd" class="content-section">
+          <div class="section-desc">
+            自動化エンジニアクローンが議論で合意されたユーザーストーリーをGherkin(Given-When-Then)形式のATDDシナリオに落とし込み、Playwrightによる自動テストコードを生成しました。
+          </div>
+
+          <div class="grid-1-1">
+            <!-- Gherkin Scenario -->
+            <div class="card glass-card">
+              <div class="card-header-actions">
+                <h2 class="card-title">📄 ATDD (Gherkin 形式)</h2>
+                <button class="btn btn-secondary btn-sm btn-github" id="btn-push-gherkin">
+                  <svg class="icon-inline" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.137 20.162 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+                  GitHubにコミット
+                </button>
+              </div>
+              <pre class="code-block" id="code-gherkin"># シミュレーションを実行するとここにGherkinシナリオが出力されます。</pre>
+            </div>
+
+            <!-- Playwright Code -->
+            <div class="card glass-card">
+              <div class="card-header-actions">
+                <h2 class="card-title">💻 Playwright 自動化テストコード</h2>
+                <button class="btn btn-secondary btn-sm btn-github" id="btn-push-playwright">
+                  <svg class="icon-inline" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.137 20.162 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+                  GitHubにコミット
+                </button>
+              </div>
+              <pre class="code-block" id="code-playwright">// シミュレーションを実行するとここにPlaywrightコードが出力されます。</pre>
+            </div>
+          </div>
+
+          <div class="card glass-card margin-top">
+            <h2 class="card-title">⚠️ 自動化エンジニアのフィードバック (実現性検証)</h2>
+            <p class="card-desc">テスト自動化（セレクタの固定、モックデータ要件、前提データ設計など）の観点から見たフィードバックです。</p>
+            <div class="feedback-box" id="feasibility-feedback">
+              シミュレーションを実行すると、ここにエンジニアの検証フィードバックが入力されます。
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION: Reviewer -->
+        <section id="sec-reviewer" class="content-section">
+          <div class="section-desc">
+            定期レビューアークローンが、開発中の成果物（要件定義書、基本設計書、UIモック定義など）と定義したATDD（Gherkin）の乖離をチェックします。
+          </div>
+
+          <div class="grid-1-1">
+            <!-- Spec Input -->
+            <div class="card glass-card">
+              <h2 class="card-title">📝 レビュー対象の設計書・コード</h2>
+              <p class="card-desc">レビュー対象とする要件定義テキスト、画面仕様設計などのマークダウンを入力してください。</p>
+              
+              <div class="form-group">
+                <textarea id="spec-input" rows="12" placeholder="レビュー対象の基本設計書や仕様書のテキストを入力...
+例: 2.1 領収書読込処理: 領収書ボタンからファイルを指定すると、日付と合計金額を画面に表示する。推奨された科目が自動でプルダウンに設定される。"></textarea>
+              </div>
+              <button class="btn btn-primary" id="btn-run-review">
+                <span class="btn-spinner hidden" id="spinner-review"></span>
+                🔍 仕様レビューを実行
+              </button>
+            </div>
+
+            <!-- Review output -->
+            <div class="card glass-card">
+              <h2 class="card-title">🤖 定期レビューアーの分析結果</h2>
+              <div class="review-status-bar hidden" id="review-status-box">
+                <span class="review-score" id="lbl-review-score">0%</span>
+                <span class="review-status-label" id="lbl-review-status">未検証</span>
+              </div>
+              <div class="feedback-box" id="review-details" style="min-height: 250px;">
+                設計テキストを入力し、左の「仕様レビューを実行」ボタンを押してください。ATDDとの整合性を検証します。
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION: Quality -->
+        <section id="sec-quality" class="content-section">
+          <div class="section-desc">
+            品質管理者クローンが、ISO/IEC 25010 (システム及びソフトウェア製品品質)の基準に従い、利用者クローンの評価と製品テスト仕様から品質スコアを算出しました。
+          </div>
+
+          <div class="grid-2-1">
+            <!-- Metrics Bars -->
+            <div class="card glass-card">
+              <h2 class="card-title">📊 ISO/IEC 25010 品質特性スコアカード</h2>
+              <div class="metrics-container" id="metrics-bars-container">
+                <!-- Bar elements go here -->
+                <div class="no-data">シミュレーションをまだ実行していません。</div>
+              </div>
+            </div>
+
+            <!-- Quality manager notes -->
+            <div class="card glass-card info-card">
+              <h2 class="card-title">🛡️ 品質管理者からの提言</h2>
+              <div class="feedback-box" id="quality-manager-notes" style="background: transparent; border: none; padding: 0;">
+                シミュレーションを実行すると、利用時品質（Usability、Reliability等）および製品テスト可能性から分析した品質評価報告が表示されます。
+              </div>
+            </div>
+          </div>
+
+          <!-- Director Report at bottom -->
+          <div class="card glass-card margin-top gradient-border-card">
+            <h2 class="card-title">👑 総合指揮者の最終報告 (妥当性判定)</h2>
+            <div class="feedback-box" id="director-report" style="background: rgba(255, 255, 255, 0.03);">
+              シミュレーションを実行すると、全体の総括レポートが表示されます。
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION: Settings -->
+        <section id="sec-settings" class="content-section">
+          <div class="card glass-card">
+            <h2 class="card-title">⚙️ システム動作設定</h2>
+            <p class="card-desc">AIクローンに利用するLLMプロバイダおよびAPIキーを設定します。また、生成したATDDファイルをコミットするためのGitHub情報を設定します。</p>
+            
+            <form id="form-settings">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="setting-provider">LLMプロバイダ</label>
+                  <select id="setting-provider">
+                    <option value="mock">デモ用 Mock シミュレータ (API不要)</option>
+                    <option value="gemini">Google Gemini API</option>
+                    <option value="openai">OpenAI API</option>
+                    <option value="anthropic">Anthropic Claude API</option>
+                  </select>
+                </div>
+                
+                <div class="form-group">
+                  <label for="setting-model">LLMモデル名</label>
+                  <input type="text" id="setting-model" placeholder="例: gemini-2.5-flash, gpt-4o-mini">
+                </div>
+
+                <div class="form-group col-span-2">
+                  <label for="setting-apikey">API キー</label>
+                  <input type="password" id="setting-apikey" placeholder="提供されたプロバイダの API キーを入力してください">
+                </div>
+
+                <div class="form-group">
+                  <label for="setting-ghtoken">GitHub パーソナルアクセストークン (PAT)</label>
+                  <input type="password" id="setting-ghtoken" placeholder="ghp_xxxxxxxx">
+                </div>
+
+                <div class="form-group">
+                  <label for="setting-ghrepo">GitHub リポジトリ名</label>
+                  <input type="text" id="setting-ghrepo" placeholder="owner/repo (例: UedaKazuki-Plainliving/UK_Lab)">
+                </div>
+
+                <div class="form-group">
+                  <label for="setting-ghbranch">コミット対象ブランチ</label>
+                  <input type="text" id="setting-ghbranch" placeholder="main または master">
+                </div>
+              </div>
+              
+              <div class="btn-group margin-top">
+                <button type="submit" class="btn btn-primary">設定を保存する</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden">設定が保存されました。</div>
+
+  <!-- GitHub Commit Modal -->
+  <div id="github-modal" class="modal hidden">
+    <div class="modal-content glass-card">
+      <h3 class="modal-title">💾 GitHubへコミット</h3>
+      <div class="form-group">
+        <label for="commit-path">コミット先ファイルパス</label>
+        <input type="text" id="commit-path" placeholder="tests/atdd_login.feature">
+      </div>
+      <div class="form-group">
+        <label for="commit-message">コミットメッセージ</label>
+        <input type="text" id="commit-message" placeholder="docs: add acceptance criteria from AI clone">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btn-modal-cancel">キャンセル</button>
+        <button class="btn btn-primary" id="btn-modal-submit">
+          <span class="btn-spinner hidden" id="spinner-modal"></span>
+          コミットを実行
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

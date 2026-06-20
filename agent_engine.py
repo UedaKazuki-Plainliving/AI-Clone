@@ -788,9 +788,27 @@ Please perform the agent pipeline simulation and generate the JSON output:"""
         model_name = settings.get("model", "gemini-2.5-flash")
 
         if not api_key or provider == "mock":
-            score = 90
-            status = "ATDD準拠 (合格)"
-            details = f"【要件定義書・基本設計書レビュー結果 (モック判定)】\n\n入力された仕様書は、指定されたATDD基準に概ね適合しています (適合度: {score}%)。\n\n詳細分析:\n- シナリオに定義された「Given-When-Then」の主要なステップが設計書上の遷移プロセスと整合しています。\n- エラー時の例外ハンドリング仕様について、一部言及が薄い箇所がありますが、基本フローは担保されています。"
+            if "既存システム仕様" in spec_text or "plans.html" in spec_text or "フィルター" in spec_text and "存在しない" in spec_text:
+                score = 35
+                status = "改善要求あり (不適合)"
+                details = """【既存サイト仕様レビュー結果 (不適合判定)】
+
+既存の宿泊プラン一覧画面 (plans.html) の仕様と、上田様の要望に基づき策定したATDD基準（Given-When-Then）を照合しました。
+
+■ 判定結果: 不適合 (適合度: 35%)
+
+■ 不適合（ギャップ）の詳細:
+1. 【重要項目】宿泊プラン一覧画面での日付フィルター機能の欠如:
+   - ATDDの「Given: 日付に '2026/07/10' を指定している」「When: '空室のあるプランを検索' ボタンを押す」に対応する要素 (#checkin-date および #search-vacant-btn) が画面上に定義されていません。
+2. 【重要項目】空室プランのみの絞り込み表示ロジックの欠如:
+   - ATDDの「Then: 空室があるプランのみが一覧に表示される」に対応する、フロントエンドとPMS(在庫管理)のAPI連動処理が設計に盛り込まれていません。
+
+■ 改善推奨項目:
+- plans.html 画面上部に日付セレクト・チェックイン日入力用のフォームを追加し、空室のあるプランのみを表示する画面遷移フローを仕様に追加してください。"""
+            else:
+                score = 90
+                status = "ATDD準拠 (合格)"
+                details = f"【要件定義書・基本設計書レビュー結果 (モック判定)】\n\n入力された仕様書は、指定されたATDD基準に概ね適合しています (適合度: {score}%)。\n\n詳細分析:\n- シナリオに定義された「Given-When-Then」の主要なステップが設計書上の遷移プロセスと整合しています。\n- エラー時の例外ハンドリング仕様について、一部言及が薄い箇所がありますが、基本フローは担保されています。"
             return {
                 "score": score,
                 "status": status,

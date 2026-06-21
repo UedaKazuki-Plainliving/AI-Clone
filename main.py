@@ -26,10 +26,13 @@ class SettingsModel(BaseModel):
     githubToken: str
     githubRepo: str
     githubBranch: str
+    s3Bucket: Optional[str] = "ueda-qa-watch"
 
 class SimulateRequest(BaseModel):
     systemName: str
     surveyInput: str
+    specInput: Optional[str] = ""
+    targetUrl: Optional[str] = ""
 
 class ReviewRequest(BaseModel):
     specText: str
@@ -66,15 +69,37 @@ def get_css():
 def get_js():
     return FileResponse(os.path.join(WORKSPACE_DIR, "app.js"))
 
+@app.get("/api/status")
+def api_get_status():
+    status_file = os.path.join(WORKSPACE_DIR, ".sim_status.json")
+    if os.path.exists(status_file):
+        try:
+            with open(status_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "status": "idle",
+        "percent": 0,
+        "phase": 0,
+        "message": "シミュレーション待機中",
+        "system_name": "",
+        "result": None
+    }
+
 @app.get("/api/settings")
 def api_get_settings():
     settings = load_settings()
+    if not settings:
+        return {}
     # Mask API key and token for safety
     masked_settings = settings.copy()
     if masked_settings.get("apiKey"):
         masked_settings["apiKey"] = masked_settings["apiKey"][:4] + "*" * (len(masked_settings["apiKey"]) - 4)
     if masked_settings.get("githubToken"):
         masked_settings["githubToken"] = masked_settings["githubToken"][:4] + "*" * (len(masked_settings["githubToken"]) - 4)
+    if "s3Bucket" not in masked_settings:
+        masked_settings["s3Bucket"] = "ueda-qa-watch"
     return masked_settings
 
 @app.post("/api/settings")
@@ -95,7 +120,13 @@ def api_save_settings(req: SettingsModel):
 def api_simulate(req: SimulateRequest):
     settings = load_settings()
     try:
-        result = agent_engine.run_simulation(req.surveyInput, req.systemName, settings)
+        result = agent_engine.run_simulation(
+            survey_input=req.surveyInput,
+            system_name=req.systemName,
+            settings=settings,
+            spec_input=req.specInput,
+            target_url=req.targetUrl
+        )
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"シミュレーションエラー: {str(e)}")
@@ -172,3 +203,17 @@ async def api_github_push(req: GitHubPushRequest):
             if isinstance(e, HTTPException):
                 raise e
             raise HTTPException(status_code=500, detail=f"GitHubへの接続中にエラーが発生しました: {str(e)}")
+
+@app.post("/api/s3/upload")
+def api_s3_upload():
+    try:
+        from s3_uploader import upload_simulation_results
+        settings = load_settings()
+        bucket_name = settings.get("s3Bucket", "ueda-qa-watch")
+        
+        uploaded = upload_simulation_results(bucket_name=bucket_name)
+        if not uploaded:
+            raise HTTPException(status_code=500, detail="S3へのアップロードに失敗しました。")
+        return {"status": "success", "files": uploaded, "message": f"S3バケット {bucket_name} へのアップロードが成功しました！"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"S3アップロードエラー: {str(e)}")

@@ -26,7 +26,7 @@ def test_static_routes(client):
     """Test that static index, styles, and scripts load correctly."""
     resp = client.get("/")
     assert resp.status_code == 200
-    assert "AI-Clone QA" in resp.text
+    assert "ATDD" in resp.text
     
     resp = client.get("/styles.css")
     assert resp.status_code == 200
@@ -102,3 +102,12 @@ def test_review_mock_endpoint(client):
     assert "status" in data
     assert "details" in data
     assert data["score"] >= 80
+
+def test_s3_upload_endpoint(client):
+    """Test S3 upload endpoint."""
+    resp = client.post("/api/s3/upload")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    assert "files" in data
+    assert len(data["files"]) > 0

@@ -1,3 +1,4 @@
+import os
 import json
 import httpx
 import re
@@ -8,7 +9,69 @@ class AgentEngine:
     def __init__(self):
         pass
 
-    def run_simulation(self, survey_input: str, system_name: str, settings: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_survey_input(self, survey_input: str) -> Dict[str, Any]:
+        info = {
+            "name": "回答者",
+            "age": 40,
+            "gender": "不明",
+            "tech_savviness": 3,
+            "pain_points": [],
+            "needs": "システムの改善"
+        }
+        if not survey_input:
+            return info
+
+        # 年齢のパース
+        age_match = re.search(r'年齢：[（\(]\s*(\d+)\s*[）\)]', survey_input)
+        if age_match:
+            info["age"] = int(age_match.group(1))
+
+        # 性別のパース
+        gender_match = re.search(r'性別：〔\s*([^〕\s]+)\s*〕', survey_input)
+        if gender_match:
+            info["gender"] = gender_match.group(1)
+
+        # リテラシー値のパース (テーブルから 〇 がある位置を特定)
+        lit_table = re.search(r'\|\s*1\s*不慣れ\s*\|.*?\n\|.*?\|.*?\n\|\s*([^\n]+)\|', survey_input)
+        if lit_table:
+            cols = [c.strip() for c in lit_table.group(1).split('|') if c.strip() != '']
+            for idx, col in enumerate(cols):
+                if '〇' in col or 'o' in col or 'O' in col or 'x' in col:
+                    info["tech_savviness"] = idx + 1
+                    break
+
+        # 最悪だった・イラっとした (ペインポイント)
+        pain_match = re.search(r'最悪だった・イラっとした[^\n]*\n\s*→[（\(]\s*([^）\)]+?)\s*[）\)]', survey_input)
+        if pain_match:
+            info["pain_points"].append(pain_match.group(1).strip())
+
+        # まっ先に直したい (ニーズ)
+        needs_match = re.search(r'まっ先に直したい[^\n]*\n\s*→[（\(]\s*([^）\)]+?)\s*[）\)]', survey_input)
+        if needs_match:
+            info["needs"] = needs_match.group(1).strip()
+
+        # カレントディレクトリの md ファイルから名前を推測
+        # (アンケート入力データと一致するファイルを探し、そのファイル名から名前をパース)
+        for fname in os.listdir("."):
+            if fname.endswith(".md") and "ヒアリング記入フォーム" in fname:
+                try:
+                    with open(fname, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    if content.strip() == survey_input.strip():
+                        # ファイル名から名前を抽出。例: ヒアリング記入フォーム（上田）.md -> 上田
+                        match = re.search(r'（([^）]+)）', fname)
+                        if match:
+                            info["name"] = match.group(1)
+                            break
+                except Exception:
+                    pass
+
+        if not info["pain_points"]:
+            info["pain_points"].append("システムの操作手順が複雑で時間がかかる。")
+
+        return info
+
+    def run_simulation(self, survey_input: str, system_name: str, settings: Dict[str, Any], spec_input: str = "", target_url: str = "") -> Dict[str, Any]:
         """
         Runs the simulation. If API keys are provided in settings, calls LLMs.
         Otherwise, falls back to context-aware mock simulation.
@@ -22,11 +85,285 @@ class AgentEngine:
             use_mock = False
 
         if use_mock:
-            return self._run_mock_simulation(survey_input, system_name)
+            return self._run_mock_simulation(survey_input, system_name, spec_input)
         else:
-            return self._run_llm_simulation(survey_input, system_name, provider, api_key, model_name)
+            return self._run_llm_simulation(survey_input, system_name, provider, api_key, model_name, spec_input, target_url)
 
-    def _run_mock_simulation(self, survey_input: str, system_name: str) -> Dict[str, Any]:
+    def _run_mock_simulation(self, survey_input: str, system_name: str, spec_input: str = "") -> Dict[str, Any]:
+        # Determine requested domain
+        keywords = survey_input.lower() + " " + system_name.lower()
+        if "経費" in keywords or "expense" in keywords or "申請" in keywords:
+            req_domain = "expense"
+        elif "ホテル" in keywords or "hotel" in keywords:
+            req_domain = "hotel"
+        elif "病院" in keywords or "クリニック" in keywords or "予約" in keywords or "medical" in keywords or "doctor" in keywords:
+            req_domain = "medical"
+        else:
+            req_domain = "ecommerce"
+
+        survey_info = self._parse_survey_input(survey_input)
+        target_name = survey_info["name"]
+
+        results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simulation_results")
+        required_files = ["user_clones.md", "debate_history.md", "atdd_gherkin.feature", "playwright_test.spec.js"]
+        
+        cache_valid = False
+        if req_domain == "hotel" and os.path.exists(results_dir) and all(os.path.exists(os.path.join(results_dir, f)) for f in required_files):
+            try:
+                with open(os.path.join(results_dir, "user_clones.md"), "r", encoding="utf-8") as f:
+                    clones_content = f.read()
+                # コアペルソナの名前をパース。例: user_1 - 上田 和樹
+                name_match = re.search(r'user_1\s*-\s*([^(\n\s]+)', clones_content)
+                if name_match:
+                    saved_name = name_match.group(1).strip()
+                    if target_name in saved_name or saved_name in target_name:
+                        cache_valid = True
+            except Exception:
+                pass
+
+        if cache_valid:
+            try:
+                user_clones = []
+                duplicate_clones = []
+                
+                # user_clones.md から動的パース
+                with open(os.path.join(results_dir, "user_clones.md"), "r", encoding="utf-8") as f:
+                    clones_content = f.read()
+                
+                # コアペルソナと複製クローンのセクション分割
+                core_section = clones_content.split("## ■ コアペルソナ")[1].split("## ■ 検証用複製クローン")[0]
+                dup_section = clones_content.split("## ■ 検証用複製クローン")[1]
+                
+                # コアペルソナのパース
+                core_blocks = core_section.split("### クローンID:")
+                for block in core_blocks[1:]:
+                    lines = block.split('\n')
+                    header = lines[0].strip()
+                    id_match = re.match(r'^(user_\d+)\s*-\s*([^(\n]+?)\s*さん\s*\(年齢:\s*(\d+)', header)
+                    if id_match:
+                        c_id = id_match.group(1).strip()
+                        name = id_match.group(2).strip() + "さん"
+                        age = int(id_match.group(3))
+                        
+                        lit = "中"
+                        pains = []
+                        needs = ""
+                        
+                        for idx, line in enumerate(lines):
+                            l_str = line.strip()
+                            if "ITリテラシー値" in l_str:
+                                lit_match = re.search(r'ITリテラシー値:\s*(\d+)', l_str)
+                                if lit_match:
+                                    lit_num = int(lit_match.group(1))
+                                    lit = "高" if lit_num >= 4 else ("低" if lit_num <= 2 else "中")
+                            elif "ペインポイント" in l_str:
+                                for n_line in lines[idx+1:]:
+                                    n_str = n_line.strip()
+                                    if n_str.startswith("-"):
+                                        pains.append(re.sub(r'^-\s*', '', n_str).strip())
+                                        break
+                            elif "本質的ニーズ" in l_str or "期待するニーズ" in l_str:
+                                for n_line in lines[idx+1:]:
+                                    n_str = n_line.strip()
+                                    if n_str.startswith("-"):
+                                        needs = re.sub(r'^-\s*', '', n_str).strip()
+                                        break
+                                        
+                        user_clones.append({
+                            "id": c_id,
+                            "name": name,
+                            "role": "一般宿泊者・現場QA" if c_id == "user_1" else "一般宿泊者・IT不慣れ",
+                            "age": age,
+                            "tech_savviness": lit,
+                            "pain_points": pains if pains else ["設定なし"],
+                            "needs": needs if needs else "設定なし"
+                        })
+                        
+                # 複製クローンのパース
+                dup_blocks = dup_section.split("### クローンID:")
+                for block in dup_blocks[1:]:
+                    lines = block.split('\n')
+                    header = lines[0].strip()
+                    id_match = re.match(r'^(dup_\d+)\s*-\s*([^(\n]+?)\s*さん\s*\(ベース:\s*(user_\d+)\s*/\s*信頼度:\s*([\d.]+)\)', header)
+                    if id_match:
+                        d_id = id_match.group(1).strip()
+                        name = id_match.group(2).strip() + "さん"
+                        base_id = id_match.group(3).strip()
+                        rel = float(id_match.group(4))
+                        
+                        age = 45
+                        lit = "中"
+                        behavior = ""
+                        
+                        for idx, line in enumerate(lines):
+                            l_str = line.strip()
+                            if "属性バリエーション" in l_str:
+                                age_match = re.search(r'年齢:\s*(\d+)', l_str)
+                                if age_match:
+                                    age = int(age_match.group(1))
+                            elif "ITリテラシー揺らぎ" in l_str:
+                                lit_match = re.search(r'ITリテラシー揺らぎ:\s*([^\s(]+)', l_str)
+                                if lit_match:
+                                    lit = lit_match.group(1).strip()
+                            elif "検証行動パターン" in l_str:
+                                behavior = re.sub(r'^-\s*\*\*検証行動パターン\*\*:\s*', '', l_str).strip()
+                                
+                        duplicate_clones.append({
+                            "id": d_id,
+                            "base_id": base_id,
+                            "name": name,
+                            "role": "複製バリエーション",
+                            "age": age,
+                            "tech_savviness": lit,
+                            "reliability": rel,
+                            "label": "信頼性: 高" if rel >= 0.85 else "信頼性: 中",
+                            "simulated_behavior": behavior if behavior else "コア利用者と類似の行動パターン。"
+                        })
+
+                debate_logs = []
+                with open(os.path.join(results_dir, "debate_history.md"), "r", encoding="utf-8") as f:
+                    debate_content = f.read()
+                
+                lines = debate_content.split('\n')
+                current_speaker = None
+                current_avatar = "🤖"
+                current_thought = ""
+                
+                for line in lines:
+                    line_str = line.strip()
+                    # スピーカー検出: 例: * **高木 (CTO) 💼**
+                    speaker_match = re.match(r'^\*\s*\*\*([^*]+)\*\*', line_str)
+                    if speaker_match:
+                        speaker_raw = speaker_match.group(1).strip()
+                        current_avatar = "🤖"
+                        for char in speaker_raw:
+                            if ord(char) > 10000 or char in "💼🔬🛠️👑🤖":
+                                current_avatar = char
+                                break
+                        current_speaker = speaker_raw
+                        current_thought = "" # リセット
+                        continue
+                    
+                    if current_speaker:
+                        # 思考ログ検出: 例: * `[思考: ...]` または `[思考プロセス: ...]`
+                        thought_match = re.search(r'\[思考(プロセス)?:\s*([^\]]+)\]', line_str)
+                        if thought_match:
+                            current_thought = f"[{thought_match.group(2).strip()}]\n"
+                            continue
+                            
+                        # セリフ検出: 例: * 「それでは...」 または - 「それでは...」
+                        dialogue_match = re.search(r'^[*-]\s*「([^」]+)」', line_str)
+                        if dialogue_match:
+                            text = dialogue_match.group(1).strip()
+                            full_text = current_thought + "「" + text + "」"
+                            debate_logs.append({
+                                "speaker": current_speaker,
+                                "avatar": current_avatar,
+                                "text": full_text
+                            })
+                            current_speaker = None
+                            current_thought = ""
+
+                if not debate_logs:
+                    debate_logs = [
+                        {
+                            "speaker": "高木洋平 (CTO)",
+                            "avatar": "💼",
+                            "text": "Stage 2 品質合意ディベートセッションを開始します。"
+                        }
+                    ]
+
+                with open(os.path.join(results_dir, "atdd_gherkin.feature"), "r", encoding="utf-8") as f:
+                    atdd_gherkin = f.read().replace("# language: ja\n", "")
+                    
+                with open(os.path.join(results_dir, "playwright_test.spec.js"), "r", encoding="utf-8") as f:
+                    playwright_code = f.read()
+
+                with open(os.path.join(results_dir, "automation_feasibility.md"), "r", encoding="utf-8") as f:
+                    feasibility_feedback = f.read()
+                    
+                with open(os.path.join(results_dir, "existing_site_atdd_review.md"), "r", encoding="utf-8") as f:
+                    review_details = f.read()
+                    
+                with open(os.path.join(results_dir, "director_report.md"), "r", encoding="utf-8") as f:
+                    director_summary = f.read()
+
+                # quality_metrics_iso25010.md から品質メトリクスを動的パース
+                quality_metrics = {}
+                with open(os.path.join(results_dir, "quality_metrics_iso25010.md"), "r", encoding="utf-8") as f:
+                    metrics_content = f.read()
+                
+                key_mapping = {
+                    "機能適合性": "functional_suitability",
+                    "性能効率性": "performance_efficiency",
+                    "互換性": "compatibility",
+                    "使用性": "usability",
+                    "信頼性": "reliability",
+                    "セキュリティ": "security",
+                    "保守性": "maintainability",
+                    "移植性": "portability"
+                }
+                for jp_key, en_key in key_mapping.items():
+                    match = re.search(fr'{jp_key}.*?:\s*(\d+)%', metrics_content)
+                    if match:
+                        quality_metrics[en_key] = int(match.group(1))
+                    else:
+                        quality_metrics[en_key] = 80
+
+                # existing_site_atdd_review.md からスコアとステータスを抽出
+                score = 30
+                status = "不適合"
+                score_match = re.search(r'適合度:\s*(\d+)%', review_details)
+                if score_match:
+                    score = int(score_match.group(1))
+                status_match = re.search(r'判定:\s*([^\n]+)', review_details)
+                if status_match:
+                    status = status_match.group(1).strip()
+
+                user_clones_md = ""
+                if os.path.exists(os.path.join(results_dir, "user_clones.md")):
+                    with open(os.path.join(results_dir, "user_clones.md"), "r", encoding="utf-8") as f:
+                        user_clones_md = f.read()
+
+                interview_log_md = ""
+                if os.path.exists(os.path.join(results_dir, "interview_log_autonomous.md")):
+                    with open(os.path.join(results_dir, "interview_log_autonomous.md"), "r", encoding="utf-8") as f:
+                        interview_log_md = f.read()
+
+                debate_history_md = ""
+                if os.path.exists(os.path.join(results_dir, "debate_history.md")):
+                    with open(os.path.join(results_dir, "debate_history.md"), "r", encoding="utf-8") as f:
+                        debate_history_md = f.read()
+
+                quality_metrics_md = ""
+                if os.path.exists(os.path.join(results_dir, "quality_metrics_iso25010.md")):
+                    with open(os.path.join(results_dir, "quality_metrics_iso25010.md"), "r", encoding="utf-8") as f:
+                        quality_metrics_md = f.read()
+
+                return {
+                    "domain": "hotel",
+                    "user_clones": user_clones,
+                    "duplicate_clones": duplicate_clones,
+                    "debate_logs": debate_logs,
+                    "atdd_gherkin": atdd_gherkin,
+                    "playwright_code": playwright_code,
+                    "feasibility_feedback": feasibility_feedback,
+                    "review_result": {
+                        "score": score,
+                        "status": status,
+                        "details": review_details
+                    },
+                    "director_summary": director_summary,
+                    "quality_metrics": quality_metrics,
+                    "user_clones_md": user_clones_md,
+                    "interview_log_md": interview_log_md,
+                    "debate_history_md": debate_history_md,
+                    "quality_metrics_md": quality_metrics_md
+                }
+            except Exception as e:
+                print(f"Error loading saved simulation: {e}")
+                pass
+
         # Keyword-based matching to tailor the mock output to the user's system name/survey
         keywords = survey_input.lower() + " " + system_name.lower()
         
@@ -370,18 +707,74 @@ test.describe('経費精算自動化テスト', () => {
 - 総合評価: 実装可能 (Feasible)。OCRのモック化さえ確立すれば、Playwrightで100%安定稼働する。"""
 
         elif domain == "hotel":
-            atdd_gherkin = """Feature: 宿泊日指定による空室プランのみの絞り込み表示と予約
-  ホテルの利用者が無駄な操作をせずにスムーズに予約完了できるよう、
-  指定した宿泊日に実際に予約可能なプランだけを一覧表示し、空室バリデーションを経て予約できること。
+            atdd_gherkin = """Feature: ホテル予約システム品質向上 ATDD受入テスト仕様書
+  宿泊客の様々なペインと心理的葛藤（経理叱責への恐怖、二重請求への不安、操作タイムアウトへの焦り、高齢者アクセシビリティ）
+  を解消し、安全かつスムーズに予約・精算・引き継ぎができること。
 
-  Scenario: 指定日の空室プランのみが表示され、ワンクリックで予約へ進む
-    Given ユーザーはホテル予約サイトのトップページで宿泊日に「2026/07/10」を指定している
-    When 「空室のあるプランを検索」ボタンを押す
-    Then 指定日に実際に空室があるプラン「ビジネス出張応援プラン」のみが一覧に表示される
-    And 満室のプランや、その日に提供されていないプランは表示されない
-    When プランの「このプランを選択する」を押す
-    Then システム内部でリアルタイム空室照会APIが走り、空室あり（在庫数 > 0）が再確認される
-    And 支払い金額の内訳として「基本宿泊料 10,000円」「消費税 1,000円」が明記された確認画面に遷移する"""
+  Scenario: US-01 指定した宿泊日に実際に予約可能なプランのみが表示されること
+    Given ユーザーは宿泊プラン検索画面にアクセスしている
+    When チェックイン日に「2026-07-10」を指定する
+    And 「空室のあるプランを検索」ボタンを押す
+    Then 一覧表示される宿泊プランの件数が「1件」となり、プラン名に「ビジネス出張応援プラン」が含まれること
+    And 満室プラン（例: ファミリー観光プラン）は非表示または選択不可になっていること
+
+  Scenario: US-02 旅費規程チェックボックスを有効化し、上限超えのプランの選択をガードする
+    Given ユーザーはプラン一覧画面で「出張モード（旅費上限自動ロック）」を有効にしている
+    When 日付「2026-07-10」で検索を実行する
+    Then 宿泊料金が「10,001円」以上のプラン（例: スイートルーム特別プラン）の「このプランを選択する」ボタンが自動的に非活性化（disabled）されること
+    And ボタンに「旅費規程上限オーバー」という警告バッジが表示されること
+
+  Scenario: US-03 予約完了時に会社宛ての電子領収書PDFをプレビューし自動発行する
+    Given ユーザーは「ビジネス出張応援プラン」の予約手続きを進めている
+    When 支払オプションで「コーポレート決済」を選択する
+    And 宛名欄に「プレインリビング株式会社」と入力して「予約を確定する」を押す
+    Then 予約が正常に完了し、自動生成された領収書No「RC-101」が発行されること
+    And 領収書のPDF宛名が「プレインリビング株式会社」、金額が「10,000円」として即座にダウンロード可能になること
+
+  Scenario: US-04 入力途中でブラウザが強制終了した場合、再開時にドラフトデータから復元されること
+    Given ユーザーは予約フォームで「宿泊者氏名（田中）」や「電話番号」を入力中である
+    When フォーム入力開始から5秒が経過する（自動暗号化保存が実行される）
+    And ユーザーがブラウザタブを誤って閉じる
+    And 2時間以内に再度予約フォームを開く
+    Then 画面に「未完了の入力データがあります。復元しますか？」とダイアログが表示されること
+    And 「はい」を選択した際、入力途中だった氏名および電話番号が自動でフォームに再入力されること
+
+  Scenario: US-05 共有PCチェックボックスがオンの場合、LocalStorageへの書き込みを完全に無効化する
+    Given ユーザーは予約画面で「共有パソコンを使用しています（自動保存オフ）」にチェックを入れる
+    When 予約フォームに入力を開始する
+    Then ブラウザの LocalStorage に暗号化されたドラフトデータが一切書き込まれていない（`localStorage.getItem` が常に `null`）であることを検証する
+    And セッション終了（タブを閉じる）と同時に入力内容がメモリから完全消滅すること
+
+  Scenario: US-06 ログイン時にSMS認証コードが送信され、WebOTP APIを介して1タップで自動入力されること
+    Given ユーザーは「090-1234-5678」を入力し、認証コード送信ボタンを押している
+    When スマートフォンに「認証コード: [4321]」を含むSMSが届く
+    Then ブラウザ上に「メッセージから自動入力しますか？」というOSの確認ポップアップが出ること
+    And ポップアップで「許可」を押した際、入力欄（`#otp-input`）に「4321」が即時に自動転記され、5分以内にログインが完了すること
+
+  Scenario: US-07 予約完了画面を印刷した際、余計なヘッダーや広告が消え、しおりが極大フォントでA4横1枚に収まること
+    Given ユーザーは予約完了画面で「旅のしおりを印刷する」を押す
+    When ブラウザの印刷メディア（@media print）がエミュレートされる
+    Then サイドナビゲーションやフッターが非表示（`display: none`）に制御されていること
+    And ホテル住所、緊急連絡先、チェックイン時間が「font-size: 30px`」以上の極大フォントでA4用紙に綺麗にレイアウトされていること
+
+  Scenario: US-08 確定ボタンを2秒間ホールドし続け、プログレスバーが100%に達した際のみ決済が実行されること
+    Given ユーザーは支払金額内訳（基本料10,000円＋税1,000円）を確認している
+    When 「長押し2秒で予約を確定する」ボタンを1回だけ短くタップする
+    Then 決済処理は実行されず、エラーも発生しないこと
+    When ボタンを「2,000ms」長押し（マウスダウン/タッチスタート）し続ける
+    Then ボタンの `aria-valuenow` 属性値が「100」に達し、ボタンが `data-status="confirmed"` に遷移して決済処理が開始されること
+
+  Scenario: US-09 予約時にアレルギー要望を入力し、厨房管理システムへハートビート監視下でデータ同期されること
+    Given ユーザーは「食事アレルギー：そば」を選択して予約を確定する
+    When 予約データが顧客DBに登録され、バックグラウンドの厨房システム同期APIが実行される
+    Then 毎分実行される整合性監視サービス（ハートビート）により、顧客DBと厨房DBのアレルギーフラグ一致が検証されること
+    And 同期エラーが発生した場合は、フロントスタッフ画面に赤色で「アレルギー未同期警告」が点滅表示されること
+
+  Scenario: US-10 入力途中画面で電話サポートをリクエストし、生成された4桁コードでスタッフに情報を引き継ぐ
+    Given ユーザーは予約フォームの「禁煙室希望」「エレベーター近くの部屋希望」を入力完了している
+    When 画面最下部の「お電話でのご予約引き継ぎ」ボタンを押す
+    Then 画面に「あなたの引き継ぎコード: 【4321】」が巨大表示されること
+    And オペレーターが管理画面で「4321」と入力した際、ユーザーがWEB上で入力途中だった「禁煙室希望」「エレベーター近」のJSONデータが安全にコールセンター側へ取得・ロードされること"""
 
             playwright_code = """import { test, expect } from '@playwright/test';
 
@@ -611,6 +1004,15 @@ test.describe('ECサイト決済自動化テスト', () => {
                 "portability": 85
             }
 
+        # Dynamic replacements for hotel domain mock fallback to avoid hardcoding names
+        if domain == "hotel" and target_name != "回答者":
+            atdd_gherkin = atdd_gherkin.replace("上田 和樹", f"{target_name} 和樹").replace("上田さん", f"{target_name}さん")
+            playwright_code = playwright_code.replace("上田", target_name)
+            feasibility_feedback = feasibility_feedback.replace("上田", target_name)
+            for log in debate_logs:
+                if "text" in log:
+                    log["text"] = log["text"].replace("上田 和樹", f"{target_name} 和樹").replace("上田さん", f"{target_name}さん").replace("上田氏", f"{target_name}氏")
+
         return {
             "domain": domain,
             "user_clones": user_clones,
@@ -624,14 +1026,14 @@ test.describe('ECサイト決済自動化テスト', () => {
             "quality_metrics": quality_metrics
         }
 
-    def _run_llm_simulation(self, survey_input: str, system_name: str, provider: str, api_key: str, model_name: str) -> Dict[str, Any]:
+    def _run_llm_simulation(self, survey_input: str, system_name: str, provider: str, api_key: str, model_name: str, spec_input: str = "", target_url: str = "") -> Dict[str, Any]:
         """
         Runs the actual LLM-based simulation.
         Queries LLM multiple times (or in a structured single agent pipeline)
         to generate the custom profiles, debates, Gherkin, Playwright, and quality characteristics.
         """
         system_instruction = """You are a software quality orchestration framework consisting of 8 collaborative AI clones.
-Your task is to analyze the input survey and system name, and output a detailed simulation report in JSON format.
+Your task is to analyze the input survey, system name, specification text, and target test URL, and output a detailed simulation report in JSON format.
 
 The JSON response MUST follow this exact structure:
 {
@@ -693,6 +1095,8 @@ Ensure the content is detailed, creative, realistic, and fully tailored to the u
 
         prompt = f"""System Name: {system_name}
 Real User Survey Input: {survey_input}
+Specification Text: {spec_input}
+Target Test URL: {target_url}
 
 Please perform the agent pipeline simulation and generate the JSON output:"""
 
